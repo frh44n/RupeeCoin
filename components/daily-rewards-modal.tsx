@@ -57,7 +57,11 @@ export function DailyRewardsModal({ isOpen, onClose, userId, onRewardClaimed }: 
       if (data.success) {
         setClaimedReward(data.reward)
         onRewardClaimed(data.reward.coins)
-        fetchRewardStatus()
+        await fetchRewardStatus()
+        setTimeout(() => {
+          onClose()
+          setClaimedReward(null) // Reset for next time
+        }, 2000) // Close after 2 seconds
       } else {
         alert(data.error || "Failed to claim reward")
       }

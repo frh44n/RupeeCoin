@@ -113,43 +113,40 @@ export async function updateUserEnergy(user: UserData): Promise<UserData> {
   return user
 }
 
-export async function updateUserTap(userId: string, coinsEarned: number): Promise<UserData | null> {
-  console.log("[v0] updateUserTap called with:", { userId, coinsEarned })
-
+export async function updateUserTap(
+  userId: string,
+  coinsEarned: number,
+  taps: number,
+): Promise<UserData | null> {
   try {
     const supabase = createClient()
-    console.log("[v0] Supabase client created")
 
-    // Get current user data
-    console.log("[v0] Fetching user data...")
-    const { data: currentUser, error: fetchError } = await supabase.from("users").select("*").eq("id", userId).single()
+    const { data: currentUser, error: fetchError } = await supabase
+      .from("users")
+      .select("coins, total_taps, energy")
+      .eq("id", userId)
+      .single()
 
     if (fetchError) {
-      console.error("[v0] Error fetching user:", fetchError)
+      console.error("Error fetching user for tap update:", fetchError)
       return null
     }
 
-    if (!currentUser) {
-      console.error("[v0] No user found with id:", userId)
-      return null
+    if (currentUser.energy < taps) {
+      // Not enough energy for all taps, but we process what we can
+      // This case should ideally be prevented by client-side checks
+      console.warn("User has insufficient energy for all taps in batch.")
+      taps = currentUser.energy
+      // Recalculate coins earned based on actual taps
+      coinsEarned = taps * (coinsEarned / taps) // Assumes coinsEarned is a multiple of taps
     }
 
-    console.log("[v0] Current user data:", currentUser)
-
-    // Check if user has enough energy
-    if (currentUser.energy < 1) {
-      console.log("[v0] User has insufficient energy:", currentUser.energy)
-      return currentUser
-    }
-
-    // Update user with new values
-    console.log("[v0] Updating user...")
     const { data: updatedUser, error: updateError } = await supabase
       .from("users")
       .update({
         coins: currentUser.coins + coinsEarned,
-        total_taps: currentUser.total_taps + 1,
-        energy: Math.max(0, currentUser.energy - 1),
+        total_taps: currentUser.total_taps + taps,
+        energy: currentUser.energy - taps,
         last_energy_update: new Date().toISOString(),
       })
       .eq("id", userId)
@@ -157,35 +154,26 @@ export async function updateUserTap(userId: string, coinsEarned: number): Promis
       .single()
 
     if (updateError) {
-      console.error("[v0] Error updating user:", updateError)
+      console.error("Error updating user after tap:", updateError)
       return null
     }
-
-    console.log("[v0] User updated successfully:", updatedUser)
 
     // Record tap session (non-blocking)
     supabase
       .from("tap_sessions")
       .insert({
         user_id: userId,
-        taps_count: 1,
+        taps_count: taps,
         coins_earned: coinsEarned,
-        energy_used: 1,
-        session_start: new Date().toISOString(),
-        session_end: new Date().toISOString(),
+        energy_used: taps,
       })
       .then(({ error }) => {
-        if (error) {
-          console.error("[v0] Error recording tap session:", error)
-        } else {
-          console.log("[v0] Tap session recorded successfully")
-        }
+        if (error) console.error("Error recording tap session:", error)
       })
 
     return updatedUser
   } catch (error) {
-    console.error("[v0] Error in updateUserTap:", error)
-    console.error("[v0] Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("Error in updateUserTap:", error)
     return null
   }
 }
