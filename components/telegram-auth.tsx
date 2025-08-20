@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,22 +11,59 @@ interface TelegramAuthProps {
 }
 
 export function TelegramAuth({ onAuth }: TelegramAuthProps) {
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isTelegram, setIsTelegram] = useState(false)
   const [telegramId, setTelegramId] = useState("")
   const [firstName, setFirstName] = useState("")
   const [username, setUsername] = useState("")
   const [referralCode, setReferralCode] = useState("")
 
-  const handleAuth = async () => {
-    if (!telegramId || !firstName) return
+  useEffect(() => {
+    const processTelegramAuth = async () => {
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.ready()
+        const tgUser = window.Telegram.WebApp.initDataUnsafe?.user
+        const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param
 
+        if (startParam) {
+          setReferralCode(startParam)
+        }
+
+        if (tgUser) {
+          setIsTelegram(true)
+          await handleAuth(tgUser)
+        } else {
+          setIsLoading(false)
+        }
+      } else {
+        setIsLoading(false)
+      }
+    }
+
+    processTelegramAuth()
+  }, [])
+
+  const handleAuth = async (tgUser: any = null) => {
     setIsLoading(true)
 
     try {
-      const telegramUser: TelegramUser = {
-        id: Number.parseInt(telegramId),
-        first_name: firstName,
-        username: username || undefined,
+      let telegramUser: TelegramUser
+      if (tgUser) {
+        telegramUser = {
+          id: tgUser.id,
+          first_name: tgUser.first_name,
+          username: tgUser.username,
+        }
+      } else {
+        if (!telegramId || !firstName) {
+          setIsLoading(false)
+          return
+        }
+        telegramUser = {
+          id: Number.parseInt(telegramId),
+          first_name: firstName,
+          username: username || undefined,
+        }
       }
 
       const response = await fetch("/api/auth/telegram", {
@@ -38,7 +75,6 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
       const data = await response.json()
 
       if (response.ok) {
-        // Process referral code if provided
         if (referralCode.trim()) {
           try {
             await fetch("/api/referrals/use", {
@@ -50,23 +86,38 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
             console.error("Error processing referral:", error)
           }
         }
-
         onAuth(data.user)
       } else {
         console.error("Auth error:", data.error)
+        setIsLoading(false)
       }
     } catch (error) {
       console.error("Auth error:", error)
-    } finally {
       setIsLoading(false)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="text-yellow-400 text-2xl">Connecting to Telegram...</div>
+        <div className="animate-ping-3d w-16 h-16 mt-4 border-4 border-yellow-400/60 rounded-full" />
+      </div>
+    )
+  }
+
+  if (isTelegram) {
+    // Already handled in useEffect, this is a fallback message
+    return <div className="text-yellow-400 text-2xl">Authenticated via Telegram. Loading...</div>
   }
 
   return (
     <Card className="max-w-md mx-auto bg-black/20 backdrop-blur-sm border border-yellow-500/20">
       <CardHeader className="text-center space-y-2">
         <CardTitle className="text-2xl font-bold text-yellow-400">Welcome to RupeeCoin</CardTitle>
-        <CardDescription className="text-gray-300">Enter your Telegram details to start earning</CardDescription>
+        <CardDescription className="text-gray-300">
+          Enter your details to play. For the best experience, open via our Telegram bot.
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
@@ -113,16 +164,12 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
         </div>
 
         <Button
-          onClick={handleAuth}
+          onClick={() => handleAuth()}
           disabled={!telegramId || !firstName || isLoading}
           className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black font-semibold"
         >
           {isLoading ? "Connecting..." : "Start Playing"}
         </Button>
-
-        <div className="text-xs text-gray-400 text-center">
-          In a real Telegram bot, this data would be automatically provided by Telegram
-        </div>
       </CardContent>
     </Card>
   )
