@@ -32,9 +32,17 @@ export function TapInterface() {
     }
   }
 
-  const processTapQueue = useCallback(async () => {
-    if (tapQueue.current.length === 0) return
+  const isProcessingQueue = useRef(false)
+  const userDataRef = useRef(userData)
 
+  useEffect(() => {
+    userDataRef.current = userData
+  }, [userData])
+
+  const processTapQueue = useCallback(async () => {
+    if (isProcessingQueue.current || tapQueue.current.length === 0) return
+
+    isProcessingQueue.current = true
     const tapsToProcess = [...tapQueue.current]
     tapQueue.current = []
 
@@ -46,7 +54,7 @@ export function TapInterface() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId: userData!.id,
+          userId: userDataRef.current!.id,
           coinsEarned: totalCoinsEarned,
           taps: totalTaps,
         }),
@@ -73,8 +81,10 @@ export function TapInterface() {
           total_taps: prev.total_taps - totalTaps,
         }
       })
+    } finally {
+      isProcessingQueue.current = false
     }
-  }, [userData])
+  }, [])
 
   const handleTap = useCallback(() => {
     if (!userData || userData.energy <= 0) return
@@ -173,7 +183,7 @@ export function TapInterface() {
             onClick={() => setCurrentView("leaderboard")}
             className="bg-yellow-600 hover:bg-yellow-700 text-black w-full"
           >
-            <Trophy className="w-5 h-5 mr-2" /> Leaderboard
+            <Trophy className="w-5 h-5 mr-2" /> Rank
           </Button>
           <DailyRewardsButton userId={userData.id} onRewardClaimed={handleRewardClaimed} />
           <ReferralButton userId={userData.id} />
