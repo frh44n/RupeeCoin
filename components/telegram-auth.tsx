@@ -21,10 +21,12 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
   useEffect(() => {
     const processTelegramAuth = async (retries = 3) => {
       console.log("Attempting Telegram auth, retries left:", retries)
-      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
-        window.Telegram.WebApp.ready()
-        const tgUser = window.Telegram.WebApp.initDataUnsafe.user
-        const startParam = window.Telegram.WebApp.initDataUnsafe.start_param
+      const tg = (window as any).Telegram?.WebApp
+
+      if (tg?.initDataUnsafe?.user) {
+        tg.ready()
+        const tgUser = tg.initDataUnsafe.user
+        const startParam = tg.initDataUnsafe.start_param
 
         console.log("Telegram user data:", tgUser)
         console.log("Start param:", startParam)
@@ -33,19 +35,17 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
           setReferralCode(startParam)
         }
 
-        if (tgUser && tgUser.id) {
+        if (tgUser?.id) {
           setIsTelegram(true)
-          await handleAuth(tgUser)
-        } else if (retries > 0) {
-          setTimeout(() => processTelegramAuth(retries - 1), 500) // Retry after 500ms
-        } else {
-          console.log("Telegram auth failed after multiple retries.")
-          setIsLoading(false)
+          await handleAuth(tgUser, tg.initData) // Send initData for backend verification
+          return
         }
-      } else if (retries > 0) {
-        setTimeout(() => processTelegramAuth(retries - 1), 500) // Retry after 500ms
+      }
+
+      if (retries > 0) {
+        setTimeout(() => processTelegramAuth(retries - 1), 500)
       } else {
-        console.log("Telegram Web App script not found.")
+        console.log("Telegram auth failed or not in Telegram. Falling back to manual.")
         setIsLoading(false)
       }
     }
@@ -53,7 +53,7 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
     processTelegramAuth()
   }, [])
 
-  const handleAuth = async (tgUser: any = null) => {
+  const handleAuth = async (tgUser: any = null, initData?: string) => {
     setIsLoading(true)
 
     try {
@@ -79,7 +79,10 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
       const response = await fetch("/api/auth/telegram", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(telegramUser),
+        body: JSON.stringify({
+          telegramUser,
+          initData, // Include initData for secure verification
+        }),
       })
 
       const data = await response.json()
@@ -90,7 +93,10 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
             await fetch("/api/referrals/use", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ userId: data.user.id, referralCode: referralCode.trim().toUpperCase() }),
+              body: JSON.stringify({
+                userId: data.user.id,
+                referralCode: referralCode.trim().toUpperCase(),
+              }),
             })
           } catch (error) {
             console.error("Error processing referral:", error)
@@ -117,7 +123,6 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
   }
 
   if (isTelegram) {
-    // Already handled in useEffect, this is a fallback message
     return <div className="text-yellow-400 text-2xl">Authenticated via Telegram. Loading...</div>
   }
 
