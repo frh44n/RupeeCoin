@@ -19,23 +19,33 @@ export function TelegramAuth({ onAuth }: TelegramAuthProps) {
   const [referralCode, setReferralCode] = useState("")
 
   useEffect(() => {
-    const processTelegramAuth = async () => {
-      if (window.Telegram && window.Telegram.WebApp) {
+    const processTelegramAuth = async (retries = 3) => {
+      console.log("Attempting Telegram auth, retries left:", retries)
+      if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
         window.Telegram.WebApp.ready()
-        const tgUser = window.Telegram.WebApp.initDataUnsafe?.user
-        const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param
+        const tgUser = window.Telegram.WebApp.initDataUnsafe.user
+        const startParam = window.Telegram.WebApp.initDataUnsafe.start_param
+
+        console.log("Telegram user data:", tgUser)
+        console.log("Start param:", startParam)
 
         if (startParam) {
           setReferralCode(startParam)
         }
 
-        if (tgUser) {
+        if (tgUser && tgUser.id) {
           setIsTelegram(true)
           await handleAuth(tgUser)
+        } else if (retries > 0) {
+          setTimeout(() => processTelegramAuth(retries - 1), 500) // Retry after 500ms
         } else {
+          console.log("Telegram auth failed after multiple retries.")
           setIsLoading(false)
         }
+      } else if (retries > 0) {
+        setTimeout(() => processTelegramAuth(retries - 1), 500) // Retry after 500ms
       } else {
+        console.log("Telegram Web App script not found.")
         setIsLoading(false)
       }
     }

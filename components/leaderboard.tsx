@@ -58,7 +58,7 @@ export function Leaderboard({ userData, onBack }: LeaderboardProps) {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-4">
           <div className="text-4xl">🏆</div>
-          <div className="text-xl text-white">Loading Leaderboard...</div>
+          <div className="text-xl text-white">Loading Ranks...</div>
         </div>
       </div>
     )
@@ -74,7 +74,7 @@ export function Leaderboard({ userData, onBack }: LeaderboardProps) {
         </Button>
         <div className="text-center">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-            Leaderboard
+            Rank
           </h1>
         </div>
         <div className="w-20" /> {/* Spacer for centering */}
